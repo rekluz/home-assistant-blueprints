@@ -1,5 +1,5 @@
 blueprint:
-  name: Motion Sensor with Switch Override
+  name: Motion Sensor with Manual Switch Override
   description: Controls lights based on motion with manual switch override capability and automatic timeout
   domain: automation
   source_url: https://github.com/rekluz/home-assistant-blueprints
