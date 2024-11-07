@@ -1,0 +1,111 @@
+blueprint:
+  name: Streaming Device Movie Mode
+  description: Automatically controls lights based on playback state from streaming devices (FireStick, etc.) during specified hours and for specified apps
+  domain: automation
+  source_url: https://github.com/rekluz/home-assistant-blueprints
+  input:
+    media_player:
+      name: Media Player
+      description: The streaming device to monitor (FireStick, etc.)
+      selector:
+        entity:
+          domain: media_player
+    
+    controlled_light:
+      name: Light
+      description: The light or light group to control
+      selector:
+        target:
+          entity:
+            domain: light
+    
+    movie_brightness:
+      name: Movie Brightness
+      description: Brightness percentage when movie is playing (1-100)
+      default: 30
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    
+    transition_time:
+      name: Transition Time
+      description: Time in seconds for brightness transitions
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: seconds
+    
+    start_time:
+      name: Start Time
+      description: Time to start dimming lights (24-hour format)
+      default: "18:00:00"
+      selector:
+        time:
+    
+    end_time:
+      name: End Time
+      description: Time to stop dimming lights (24-hour format)
+      default: "07:00:00"
+      selector:
+        time:
+    
+    streaming_apps:
+      name: Streaming Apps
+      description: List of app IDs that should trigger movie mode (one per line)
+      default: |
+        com.amazon.firetv.youtube.tv
+        com.amazon.amazonvideo.livingroom
+        com.netflix.ninja
+        com.disney.disneyplus
+        com.hbo.hbonow
+        com.plexapp.android
+        com.apple.atve.amazon.appletv
+      selector:
+        text:
+          multiline: true
+
+variables:
+  current_app: "{{ state_attr(trigger.entity_id, 'app_id') }}"
+  movie_apps: "{{ input.streaming_apps.split('\n') | map('trim') | list }}"
+
+trigger:
+  - platform: state
+    entity_id: !input media_player
+    to:
+      - playing
+      - paused
+      - idle
+      - standby
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state == 'playing' }}"
+          - condition: template
+            value_template: "{{ current_app in movie_apps }}"
+          - condition: time
+            after: !input start_time
+            before: !input end_time
+        sequence:
+          - service: light.turn_on
+            target: !input controlled_light
+            data:
+              brightness_pct: !input movie_brightness
+              transition: !input transition_time
+      
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.to_state.state in ['paused', 'idle', 'standby'] }}"
+          - condition: template
+            value_template: "{{ current_app in movie_apps }}"
+        sequence:
+          - service: light.turn_on
+            target: !input controlled_light
+            data:
+              brightness_pct: 100
+              transition: !input transition_time
