@@ -1,0 +1,91 @@
+blueprint:
+  name: Mail Detection Notification
+  description: Sends notifications when motion is detected in a mail delivery area
+  domain: automation
+  source_url: https://github.com/your_username/home-assistant-blueprints
+  input:
+    motion_sensor:
+      name: Motion Sensor
+      description: Select the motion sensor that detects mail delivery
+      selector:
+        device:
+          integration: binary_sensor
+          entity:
+            domain: binary_sensor
+            device_class: motion
+    
+    notify_alexa:
+      name: Notify on Alexa
+      description: Enable notification on Alexa devices
+      default: true
+      selector:
+        boolean:
+    
+    alexa_device:
+      name: Alexa Device
+      description: Select which Alexa device to notify (if enabled)
+      default: ""
+      selector:
+        entity:
+          domain: notify
+          integration: alexa_media
+      required: false
+    
+    alexa_message:
+      name: Alexa Notification Message
+      description: Message to be announced on Alexa devices
+      default: "There is mail at the front door."
+      selector:
+        text:
+    
+    notify_mobile:
+      name: Notify on Mobile
+      description: Enable mobile app notifications
+      default: true
+      selector:
+        boolean:
+    
+    mobile_device:
+      name: Mobile Device
+      description: Select which mobile device to notify (if enabled)
+      default: ""
+      selector:
+        entity:
+          domain: notify
+          integration: mobile_app
+      required: false
+    
+    mobile_message:
+      name: Mobile Notification Message
+      description: Message to be sent to mobile devices
+      default: "Mail has arrived"
+      selector:
+        text:
+
+mode: single
+
+trigger:
+  - platform: device
+    type: motion
+    device_id: !input motion_sensor
+    entity_id: !input motion_sensor
+    domain: binary_sensor
+
+action:
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ input.notify_alexa }}"
+        sequence:
+          - service: !input alexa_device
+            data:
+              message: !input alexa_message
+  
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ input.notify_mobile }}"
+        sequence:
+          - service: !input mobile_device
+            data:
+              message: !input mobile_message
