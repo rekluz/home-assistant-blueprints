@@ -1,0 +1,146 @@
+blueprint:
+  name: Motion Sensor with Switch Override
+  description: Controls lights based on motion with manual switch override capability and automatic timeout
+  domain: automation
+  source_url: https://github.com/rekluz/home-assistant-blueprints
+  input:
+    motion_sensor:
+      name: Motion Sensor
+      description: Motion sensor to trigger the lights
+      selector:
+        entity:
+          domain: binary_sensor
+          device_class: motion
+    
+    controlled_lights:
+      name: Controlled Lights
+      description: Lights to be controlled by motion and switches
+      selector:
+        target:
+          entity:
+            domain: light
+    
+    override_switch:
+      name: Override Switch
+      description: Input boolean to track override state
+      selector:
+        entity:
+          domain: input_boolean
+    
+    timeout_minutes:
+      name: Timeout Duration
+      description: Minutes to wait after last motion before turning off lights
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+
+trigger:
+  - platform: state
+    entity_id: !input motion_sensor
+    to: "on"
+  
+  # Track light state changes
+  - platform: state
+    entity_id: !input controlled_lights
+  
+  # Track override switch changes
+  - platform: state
+    entity_id: !input override_switch
+    to: "on"
+  - platform: state
+    entity_id: !input override_switch
+    to: "off"
+
+variables:
+  timeout_seconds: "{{ input.timeout_minutes | int * 60 }}"
+  light_was_manually_controlled: >
+    {% set last_motion = states[input.motion_sensor].last_changed %}
+    {% set last_automation = this.last_triggered %}
+    {% set time_diff = (as_timestamp(now()) - as_timestamp(last_automation)) | int %}
+    {{ time_diff > 2 }}
+
+condition:
+  - condition: template
+    value_template: |
+      {{ not is_state(input.override_switch, 'on') or 
+         trigger.entity_id == input.override_switch }}
+
+action:
+  - choose:
+      # Motion detected - turn on lights if no override
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.entity_id == input.motion_sensor }}"
+          - condition: state
+            entity_id: !input override_switch
+            state: "off"
+        sequence:
+          - service: light.turn_on
+            target: !input controlled_lights
+          
+          # Wait for motion to stop
+          - wait_for_trigger:
+              platform: state
+              entity_id: !input motion_sensor
+              to: "off"
+          
+          # Delay before turning off
+          - delay:
+              seconds: !input timeout_seconds
+          
+          # Check override still off before turning off lights
+          - condition: state
+            entity_id: !input override_switch
+            state: "off"
+          
+          - service: light.turn_off
+            target: !input controlled_lights
+
+      # Manual light control - set override accordingly
+      - conditions:
+          - condition: template
+            value_template: "{{ trigger.entity_id in expand(input.controlled_lights) }}"
+          - condition: template
+            value_template: "{{ light_was_manually_controlled }}"
+        sequence:
+          - choose:
+              # Light turned on manually
+              - conditions:
+                  - condition: template
+                    value_template: "{{ trigger.to_state.state == 'on' }}"
+                sequence:
+                  - service: input_boolean.turn_on
+                    target:
+                      entity_id: !input override_switch
+              
+              # Light turned off manually
+              - conditions:
+                  - condition: template
+                    value_template: "{{ trigger.to_state.state == 'off' }}"
+                sequence:
+                  - service: input_boolean.turn_off
+                    target:
+                      entity_id: !input override_switch
+
+      # Override turned on - turn on lights
+      - conditions:
+          - condition: template
+            value_template: |
+              {{ trigger.entity_id == input.override_switch 
+                 and trigger.to_state.state == 'on' }}
+        sequence:
+          - service: light.turn_on
+            target: !input controlled_lights
+
+      # Override turned off - turn off lights
+      - conditions:
+          - condition: template
+            value_template: |
+              {{ trigger.entity_id == input.override_switch 
+                 and trigger.to_state.state == 'off' }}
+        sequence:
+          - service: light.turn_off
+            target: !input controlled_lights
