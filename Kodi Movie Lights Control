@@ -2,7 +2,7 @@ blueprint:
   name: Kodi Movie Lights Control
   description: Controls room lights based on Kodi media player state, adjusting brightness for playing, paused, and stopped states
   domain: automation
-  source_url: https://github.com/your_username/home-assistant-blueprints
+  source_url: https://github.com/rekluz/home-assistant-blueprints
   input:
     media_player:
       name: Media Player
