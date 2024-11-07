@@ -1,0 +1,124 @@
+blueprint:
+  name: Kodi Movie Lights Control
+  description: Controls room lights based on Kodi media player state, adjusting brightness for playing, paused, and stopped states
+  domain: automation
+  source_url: https://github.com/your_username/home-assistant-blueprints
+  input:
+    media_player:
+      name: Media Player
+      description: The Kodi media player to monitor
+      selector:
+        entity:
+          domain: media_player
+    controlled_light:
+      name: Light
+      description: The light to control based on playback state
+      selector:
+        entity:
+          domain: light
+    playing_brightness:
+      name: Playing Brightness
+      description: Brightness percentage when media is playing (1-100)
+      default: 35
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    paused_brightness:
+      name: Paused Brightness
+      description: Brightness percentage when media is paused (1-100)
+      default: 75
+      selector:
+        number:
+          min: 1
+          max: 100
+          unit_of_measurement: "%"
+    playing_transition:
+      name: Playing Transition
+      description: Transition time in seconds when dimming lights for playback
+      default: 3
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: seconds
+    pause_transition:
+      name: Pause Transition
+      description: Transition time in seconds when brightening lights for pause
+      default: 2
+      selector:
+        number:
+          min: 0
+          max: 30
+          unit_of_measurement: seconds
+
+trigger:
+  - platform: state
+    entity_id: !input media_player
+    to: playing
+  - platform: state
+    entity_id: !input media_player
+    to: paused
+  - platform: state
+    entity_id: !input media_player
+    to: idle
+  - platform: state
+    entity_id: !input media_player
+    to: "off"
+
+action:
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: !input media_player
+            state: playing
+        sequence:
+          - service: scene.create
+            data:
+              scene_id: pre_movie_state
+              snapshot_entities:
+                - !input controlled_light
+          - service: light.turn_on
+            target:
+              entity_id: !input controlled_light
+            data:
+              brightness_pct: !input playing_brightness
+              transition: !input playing_transition
+      
+      - conditions:
+          - condition: state
+            entity_id: !input media_player
+            state: paused
+        sequence:
+          - service: light.turn_on
+            target:
+              entity_id: !input controlled_light
+            data:
+              brightness_pct: !input paused_brightness
+              transition: !input pause_transition
+      
+      - conditions:
+          - condition: or
+            conditions:
+              - condition: state
+                entity_id: !input media_player
+                state: idle
+              - condition: state
+                entity_id: !input media_player
+                state: "off"
+        sequence:
+          - service: scene.turn_on
+            target:
+              entity_id: scene.pre_movie_state
+            data:
+              transition: !input pause_transition
+          - delay:
+              seconds: 2
+          - service: light.turn_on
+            target:
+              entity_id: !input controlled_light
+            data:
+              brightness_pct: 100
+              transition: !input pause_transition
+            enabled: "{{ not is_state(!input controlled_light, 'on') }}"
