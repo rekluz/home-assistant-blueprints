@@ -2,7 +2,7 @@ blueprint:
   name: Mail Detection Notification
   description: Sends notifications when motion is detected in a mail delivery area
   domain: automation
-  source_url: https://github.com/your_username/home-assistant-blueprints
+  source_url: https://github.com/rekluz/home-assistant-blueprints
   input:
     motion_sensor:
       name: Motion Sensor
